@@ -155,98 +155,78 @@ jobs:
           PY
 
   # ─────────────────────────────────────────────────────────────
-  # 2. 交叉编译 aarch64 wheel
+  # 2. 收集 aarch64 wheel
+  #
+  # 实测结论：这 10 个原生扩展在 PyPI 上都有 manylinux aarch64 官方 wheel，
+  # 无需交叉编译。原先用 manylinux_2_28_aarch64 容器编译的写法有两个问题：
+  #   1. GitHub 托管的 aarch64 容器在本仓库环境下起不来（container not running）
+  #   2. 完全没必要 —— pip download 指定 platform 即可拿到官方轮子
+  #
+  # 注意 platform tag 要同时给 manylinux2014_aarch64 与 manylinux_2_28_aarch64：
+  # pydantic-core 只发 2_17，pillow/numpy 只发 2_27+。
   # ─────────────────────────────────────────────────────────────
   wheels:
-    name: 编译 aarch64 wheel
+    name: 收集 aarch64 wheel
     if: github.event_name != 'pull_request' || inputs.build_wheels
     runs-on: ubuntu-24.04
-    container:
-      image: quay.io/pypa/manylinux_2_28_aarch64:latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { name: numpy,         spec: "numpy>=2.2.6" }
-          - { name: pydantic-core, spec: "pydantic-core>=2.46.3" }
-          - { name: greenlet,      spec: "greenlet>=3.4.0" }
-          - { name: pillow,        spec: "pillow>=12.3.0" }
-          - { name: msgpack,       spec: "msgpack>=1.2.1" }
-          - { name: rapidfuzz,     spec: "rapidfuzz>=3.14.5" }
-          - { name: watchfiles,    spec: "watchfiles>=1.1.1" }
-          - { name: zstandard,     spec: "zstandard>=0.25.0" }
-          - { name: rpds-py,       spec: "rpds-py>=0.30.0" }
-          - { name: cryptography,  spec: "cryptography>=50.0.1" }
     steps:
-      # manylinux 容器是裸镜像，没有 node20，actions/checkout@v4 无法运行。
-      # 用轻量的 wget 直接拉 tarball，避开 node 依赖。
-      - name: 检出源码（容器内无 node，用 tarball）
-        run: |
-          set -eux
-          mkdir -p src-checkout
-          MIRROR="https://ghfast.top/https://github.com/${{ github.repository }}/archive/${{ github.sha }}.tar.gz"
-          FALLBACK="https://codeload.github.com/${{ github.repository }}/tar.gz/${{ github.sha }}"
-          # manylinux 镜像不保证有 wget；curl 一定有
-          curl -fsSL --retry 3 --max-time 180 "$MIRROR" -o /tmp/src.tar.gz \
-            || curl -fsSL --retry 3 --max-time 180 "$FALLBACK" -o /tmp/src.tar.gz
-          tar -xzf /tmp/src.tar.gz -C src-checkout --strip-components=1
-          ls src-checkout | head
+      - uses: actions/checkout@v4
 
-      - name: 检查目标架构
-        working-directory: src-checkout
-        run: |
-          uname -m
-          test "$(uname -m)" = "aarch64" || { echo "runner 非 aarch64"; exit 1; }
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: ""
 
-      - name: 选择 CPython 3.12
-        run: |
-          PY=/opt/python/cp312-cp312/bin/python
-          "$PY" -V
-          echo "/opt/python/cp312-cp312/bin" >> "$GITHUB_PATH"
-
-      - name: 编译 wheel
-        working-directory: src-checkout
-        env:
-          SPEC: ${{ matrix.spec }}
-          NAME: ${{ matrix.name }}
+      - name: 下载 aarch64 wheel
         run: |
           set -eux
           mkdir -p wheelhouse
-          if [ "$NAME" = "cryptography" ]; then
-            # cryptography 为 Rust 实现，需要 rust 工具链
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-              | sh -s -- -y --profile minimal --default-toolchain stable
-            . "$HOME/.cargo/env"
-            export PATH="$HOME/.cargo/bin:$PATH"
-            rustc -V
-          fi
+          # 优先用镜像（中国大陆网络更稳），失败再回退官方源
+          INDEX="-i https://mirrors.aliyun.com/pypi/simple"
           python -m pip install --upgrade pip
-          # 优先取官方 wheel；没有才源码编译
-          python -m pip download --only-binary=:all: --dest wheelhouse \
-            --platform manylinux_2_28_aarch64 --python-version 3.12 \
-            --implementation cp --abi cp312 "$SPEC" \
-            || python -m pip wheel --no-deps --wheel-dir wheelhouse "$SPEC"
+          python -m pip download --only-binary=:all: --no-deps --dest wheelhouse \
+            $INDEX \
+            --platform manylinux2014_aarch64 \
+            --platform manylinux_2_28_aarch64 \
+            --python-version 3.12 --implementation cp --abi cp312 \
+            'numpy>=2.2.6' 'pydantic-core>=2.46.3' 'greenlet>=3.4.0' \
+            'pillow>=12.3.0' 'msgpack>=1.2.1' 'rapidfuzz>=3.14.5' \
+            'watchfiles>=1.1.1' 'zstandard>=0.25.0' 'rpds-py>=0.30.0' \
+            'cryptography>=50.0.1'
           ls -lh wheelhouse
 
+      - name: 校验确实是 aarch64 轮子
+        run: |
+          set -eux
+          count=$(ls wheelhouse/*.whl | wc -l)
+          echo "wheel 数量: $count"
+          test "$count" -eq 10
+          for w in wheelhouse/*.whl; do
+            case "$w" in
+              *aarch64*) ;;
+              *) echo "非 aarch64 轮子: $w"; exit 1 ;;
+            esac
+          done
+          echo "OK: 全部为 aarch64 wheel"
+
       - name: 体积统计
-        working-directory: src-checkout
         run: |
           {
-            echo "### ${{ matrix.name }}"
+            echo "### aarch64 wheel 明细"
             echo '```'
-            du -h wheelhouse/* | sort -h
+            du -h wheelhouse/*.whl | sort -h
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: wheel-${{ matrix.name }}
-          path: src-checkout/wheelhouse/*.whl
+          name: all-wheels
+          path: wheelhouse/*.whl
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30
 
   # ─────────────────────────────────────────────────────────────
-  # 3. 汇总 wheel 体积，评估 APK 增量
+  # 3. 汇总体积，评估 APK 增量
   # ─────────────────────────────────────────────────────────────
   summarize:
     name: 汇总产物体积
@@ -256,7 +236,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
-          pattern: wheel-*
+          pattern: all-wheels
 
       - name: 汇总
         run: |
@@ -277,11 +257,6 @@ jobs:
             total=$(find artifacts -name '*.whl' -printf '%s\n' | awk '{s+=$1} END {print s+0}')
             echo "**合计: $(numfmt --to=iec --suffix=B "$total")**"
             echo ""
-            echo "> 注：以上为 wheel 压缩体积。安装后解压体积通常为 2~3 倍。"
+            echo "> 对比：上游 MaiBot 全功能构建的 site-packages 为 786MB。"
+            echo "> 以上为 wheel 压缩体积，安装后解压通常为 2~3 倍。"
           } >> "$GITHUB_STEP_SUMMARY"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: all-wheels
-          path: artifacts/**/*.whl
-          retention-days: 30
