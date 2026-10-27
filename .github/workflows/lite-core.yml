@@ -43,7 +43,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
+          # 不用 cache: pip —— 它会扫描仓库里的 lockfile，
+          # 而本分支已移除 dashboard/（原 npm lockfile）等目录。
+          cache: ""
 
       - name: 安装精简依赖
         run: |
