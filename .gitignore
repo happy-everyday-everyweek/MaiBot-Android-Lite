@@ -19,3 +19,7 @@ wheelhouse/
 
 # MaiBot 运行时数据（部分版本）
 /.backup/
+
+# 本分支不含 WebUI 前端与上游测试套件
+/dashboard/
+/pytests/
