@@ -29,17 +29,31 @@
 | 指标 | 上游全功能 | 本分支 |
 |---|---|---|
 | 第三方原生扩展 | **61** | **10** |
-| site-packages 体积 | 786 MB | 见 CI 汇总 |
+| site-packages 体积 | 786 MB | — |
+| 原生 wheel 压缩体积 | — | **36 MB** |
 | `scipy` / `pandas` / `pyarrow` / `faiss` | 必需 | 完全移除 |
 | `fastapi` / `uvicorn` / `starlette` | 必需 | 完全移除 |
 | 需要 proot | 是 | **否** |
 
-保留下来的 10 个原生扩展（均为 aarch64 可得）：
+保留下来的 10 个原生扩展，全部有 PyPI 官方 manylinux aarch64 轮子，**无需交叉编译**：
 
-```
-numpy  pydantic_core  sqlalchemy(greenlet)  pillow
-msgpack  rapidfuzz  watchfiles  zstandard  rpds-py  cryptography
-```
+| 包 | wheel 体积 | manylinux tag |
+|---|---|---|
+| numpy | 15 MB | 2_27 / 2_28 |
+| pillow | 6.3 MB | 2_27 / 2_28 |
+| zstandard | 4.9 MB | 2_17 / 2014 |
+| cryptography | 4.6 MB | 2_17 / 2014 |
+| pydantic-core | 2.0 MB | 2_17 / 2014 |
+| rapidfuzz | 1.4 MB | 2_26 / 2_28 |
+| greenlet | 600 KB | 2_24 / 2_28 |
+| msgpack | 452 KB | 2_17 / 2014 |
+| watchfiles | 448 KB | 2_17 / 2014 |
+| rpds-py | 368 KB | 2_17 / 2014 |
+| **合计** | **36 MB** | |
+
+> 注意 tag 不统一：`pydantic-core` 只发 2_17，`pillow`/`numpy` 只发 2_27+。
+> 用 `pip download --platform` 时必须同时给 `manylinux2014_aarch64` 和
+> `manylinux_2_28_aarch64` 两个值，否则会漏包。
 
 ---
 
@@ -121,21 +135,38 @@ python scripts/check_lite_core.py --strict
 
 ## CI
 
-`.github/workflows/lite-core.yml`：
+`.github/workflows/lite-core.yml`，三个 job 全部通过（run `57ca20e`）：
 
-1. **gate** —— 在干净环境装精简依赖，跑门禁 + 静态扫描
-2. **wheels** —— 用 `manylinux_2_28_aarch64` 容器交叉编译 10 个原生扩展
-   （`cryptography` 额外装 Rust 工具链），产出 wheel artifact
-3. **summarize** —— 汇总 wheel 体积，写进 job summary，用于评估 APK 增量
+1. **核心依赖门禁**
+   - 在干净环境安装 `requirements-lite.txt`
+   - 确认 `fastapi`/`uvicorn`/`starlette`/`pandas`/`scipy`/`pyarrow`/`faiss`/`playwright`/`matplotlib` **确实不存在**
+   - 跑 `scripts/check_lite_core.py --strict`
+   - 静态扫描核心路径无模块级重依赖导入
+   - 校验 A_memorix 均为延迟导入
 
-wheel 可用于 Chaquopy 的 `sourceDir` 离线安装，或 Termux 的本地 pip 源。
+2. **收集 aarch64 wheel**
+   - `pip download --platform` 一次性拿全部 10 个官方轮子（35.2 MB artifact）
+   - 断言数量为 10 且全部含 `aarch64`
+
+3. **汇总产物体积** —— 写进 job summary，对比上游 786MB
+
+### 踩过的坑（都已修复）
+
+| 问题 | 原因 | 修法 |
+|---|---|---|
+| `cache: pip` 失败 | 会扫描已删除的 `dashboard/` lockfile | 关闭 cache |
+| wheels 全部 checkout 失败 | manylinux 裸镜像无 node20 | 改用 `pip download`，不再用容器 |
+| `--platform` 只给 2_28 漏包 | pydantic-core 只发 2_17 | 同时给 2014 与 2_28 |
+| 误报 `websockets` 是重依赖 | 它是 google-genai 的硬依赖 | 从强制缺席清单移除 |
+| 误报 webui/playwright | 扫了整个 src/ 且含缩进 | 限定核心目录 + 只查模块级 |
+| **门禁检出 0 个扩展却"通过"** | setup-python 的 site-packages 在 stdlib 内，被误判为内置 | 改按目录结构判定 + 加下限断言 |
 
 ---
 
 ## 待办
 
-- [ ] 把 `chat_bot.message_process` 接成 Android 侧的入口（替代 maim_message 的 WebSocket 服务端）
-- [ ] 写一个最小的 `LiteRuntime`：不启动 WebUI / plugin_runtime / API server，只跑消息处理
+- [ ] 把 `chat_bot.message_process` 接成 Android 侧入口（替代 maim_message 的 WebSocket 服务端）
+- [ ] 写最小的 `LiteRuntime`：不启动 WebUI / plugin_runtime / API server，只跑消息处理
 - [ ] 多租户 / 记忆隔离相关代码的进一步裁剪（`session_id` 简化）
 - [ ] Chaquopy 侧确认 CPython 3.12 支持情况
 - [ ] 实测瘦身后的启动耗时与 RSS
