@@ -86,19 +86,41 @@ jobs:
         run: |
           python - <<'PY'
           import pathlib, re, sys
+
+          # 只扫描"核心聊天链路"。以下目录是刻意保留但不参与嵌入式核心的：
+          #   src/webui/                  - WebUI 服务端（本构建不启动）
+          #   src/common/message_server/  - 官方 API/WS server（本构建不启动）
+          #   src/plugin_runtime/         - 插件运行时（本构建不启动）
+          #   src/A_memorix/              - 长期记忆（已 disabled）
+          #   src/agent/                  - 外接 Agent（已 disabled）
+          #   src/mcp_module/             - MCP 服务端（已 disabled）
+          #   src/computer/               - Windows Sandbox 桥（平台不适用）
+          EXCLUDED = {
+              "webui", "plugin_runtime", "A_memorix", "agent",
+              "mcp_module", "computer", "plugin_market",
+          }
+          EXCLUDED_FILES = {"common/message_server"}
+
           root = pathlib.Path("src")
+          # 只匹配"模块级"导入（行首无缩进）。函数内的延迟导入是本分支刻意采用
+          # 的剥离手法，不构成负担：真正危险的是模块导入期就被拉起的重依赖。
           pattern = re.compile(
-              r"^\s*(?:from|import)\s+(fastapi|uvicorn|starlette|pandas|scipy|"
+              r"^(?:from|import)\s+(fastapi|uvicorn|starlette|pandas|scipy|"
               r"pyarrow|faiss|playwright|matplotlib)\b", re.MULTILINE)
           hits = []
           for py in root.rglob("*.py"):
-              if "__pycache__" in py.parts:
+              parts = py.parts
+              if "__pycache__" in parts:
+                  continue
+              if len(parts) > 1 and parts[1] in EXCLUDED:
+                  continue
+              if any("/".join(parts[1:]).startswith(f) for f in EXCLUDED_FILES):
                   continue
               text = py.read_text(encoding="utf-8", errors="ignore")
               for m in pattern.finditer(text):
                   hits.append(f"{py}: {m.group(0).strip()}")
           if hits:
-              print("发现直接重依赖导入:", *hits, sep="\n  ")
+              print("核心路径发现直接重依赖导入:", *hits, sep="\n  ")
               sys.exit(1)
           print("OK: 核心路径无直接重依赖导入")
           PY
@@ -107,19 +129,29 @@ jobs:
         run: |
           python - <<'PY'
           import pathlib, re, sys
-          # A_memorix 只能出现在过 optional_features 的延迟导入中
+
+          # 与上一步一致：这些目录刻意保留但不在嵌入式核心范围内。
+          EXCLUDED = {
+              "webui", "plugin_runtime", "A_memorix", "agent",
+              "mcp_module", "computer", "plugin_market",
+          }
+
+          # 核心路径上不允许出现"模块级"硬导入 A_memorix；
+          # 必须一律经由 src/common/optional_features.py 的延迟导入。
           bad = re.compile(r"^from\s+src\.A_memorix\.[\w.]+\s+import", re.MULTILINE)
           hits = []
           for py in pathlib.Path("src").rglob("*.py"):
-              if "__pycache__" in py.parts or py.parts[1] == "A_memorix":
+              parts = py.parts
+              if "__pycache__" in parts:
                   continue
-              text = py.read_text(encoding="utf-8", errors="ignore")
-              if bad.search(text):
+              if len(parts) > 1 and parts[1] in EXCLUDED:
+                  continue
+              if bad.search(py.read_text(encoding="utf-8", errors="ignore")):
                   hits.append(str(py))
           if hits:
-              print("模块级硬导入 A_memorix:", *hits, sep="\n  ")
+              print("核心路径模块级硬导入 A_memorix:", *hits, sep="\n  ")
               sys.exit(1)
-          print("OK: A_memorix 均为延迟导入")
+          print("OK: 核心路径的 A_memorix 均为延迟导入")
           PY
 
   # ─────────────────────────────────────────────────────────────
