@@ -54,6 +54,10 @@ ALLOWED_NATIVE = {
 
 NATIVE_LIMIT = 12
 
+# 下限：核心链路必须至少加载这些原生扩展，否则说明检测逻辑失效
+# （曾出现 setup-python 的 site-packages 位于 stdlib 下被误判为内置，导致检出 0 个）
+REQUIRED_NATIVE = {"numpy", "pydantic_core", "sqlalchemy"}
+
 
 class LiteGate:
     """导入拦截器：模拟"这些包在目标平台上不可用"。"""
@@ -75,24 +79,43 @@ class LiteGate:
 def collect_native_extensions() -> list[str]:
     """已加载的**第三方**原生扩展（顶层名）。
 
-    排除两类：
-    - 以 ``_`` 开头的 CPython 内置扩展（``_ssl``/``_sqlite3`` 等）
-    - 标准库自带的 C 扩展（``math``/``array``/``zlib``/``binascii`` 等），
-      它们是解释器的一部分，不是需要额外打包的第三方 wheel
+    判定方式：看 ``__file__`` 相对 stdlib 的层级。
+    - CPython 内置 C 扩展位于 ``<stdlib>/lib-dynload/``（如 ``math``/``zlib``）
+      或直接位于 ``<stdlib>/``（如 ``_ssl`` 在部分构建下）
+    - 第三方包位于 ``<stdlib>/site-packages/``（system python 安装）
+      或 ``<venv>/lib/pythonX.Y/site-packages/``（独立于 stdlib）
+
+    注意不能简单用 "path 在 stdlib 下" 判断：使用 actions/setup-python 时，
+    site-packages 本身就在 stdlib 目录里，那样会把第三方包误判为内置。
     """
 
-    stdlib_prefix = str(Path(sysconfig.get_paths()["stdlib"])).rstrip("/") + "/"
+    stdlib = Path(sysconfig.get_paths()["stdlib"]).resolve()
     names = set()
     for name, module in list(sys.modules.items()):
-        path = getattr(module, "__file__", "") or ""
-        if not path.endswith(".so"):
+        path_str = getattr(module, "__file__", "") or ""
+        if not path_str.endswith(".so"):
             continue
         top = name.split(".")[0]
         if top.startswith("_"):
             continue
-        # 标准库目录下的 .so 视为内置
-        if path.startswith(stdlib_prefix):
+        path = Path(path_str).resolve()
+
+        # 判断该 .so 是否位于 stdlib 的 site-packages 之外
+        rel = None
+        try:
+            rel = path.relative_to(stdlib)
+        except ValueError:
+            # 不在 stdlib 下（典型情况：venv 的 site-packages）—— 第三方
+            names.add(top)
             continue
+
+        # 位于 stdlib 下：只有 lib-dynload 与 stdlib 根目录才算内置
+        parts = rel.parts
+        if len(parts) >= 2 and parts[0] == "lib-dynload":
+            continue
+        if len(parts) == 1:
+            continue
+        # site-packages / dist-packages 下 —— 第三方
         names.add(top)
     return sorted(names)
 
@@ -135,6 +158,11 @@ def main() -> int:
 
     # 4) 原生扩展白名单
     natives = collect_native_extensions()
+    missing = sorted(REQUIRED_NATIVE - set(natives))
+    if missing:
+        failures.append(
+            f"未检测到本应加载的原生扩展 {missing}（检测逻辑可能失效）"
+        )
     unexpected = [n for n in natives if n not in ALLOWED_NATIVE]
     if unexpected:
         failures.append(f"出现未预期的原生扩展: {unexpected}")
