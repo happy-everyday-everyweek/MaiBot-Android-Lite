@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import sysconfig
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -72,14 +73,28 @@ class LiteGate:
 
 
 def collect_native_extensions() -> list[str]:
-    """已加载的第三方原生扩展（顶层名）。"""
+    """已加载的**第三方**原生扩展（顶层名）。
 
+    排除两类：
+    - 以 ``_`` 开头的 CPython 内置扩展（``_ssl``/``_sqlite3`` 等）
+    - 标准库自带的 C 扩展（``math``/``array``/``zlib``/``binascii`` 等），
+      它们是解释器的一部分，不是需要额外打包的第三方 wheel
+    """
+
+    stdlib_prefix = str(Path(sysconfig.get_paths()["stdlib"])).rstrip("/") + "/"
     names = set()
     for name, module in list(sys.modules.items()):
         path = getattr(module, "__file__", "") or ""
-        if path.endswith(".so"):
-            names.add(name.split(".")[0])
-    return sorted(n for n in names if not n.startswith("_"))
+        if not path.endswith(".so"):
+            continue
+        top = name.split(".")[0]
+        if top.startswith("_"):
+            continue
+        # 标准库目录下的 .so 视为内置
+        if path.startswith(stdlib_prefix):
+            continue
+        names.add(top)
+    return sorted(names)
 
 
 def main() -> int:

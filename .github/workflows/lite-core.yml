@@ -152,11 +152,11 @@ jobs:
         run: |
           set -eux
           mkdir -p src-checkout
-          URL="https://ghfast.top/https://github.com/${{ github.repository }}/archive/${{ github.sha }}.tar.gz"
-          wget -q --timeout=120 --tries=3 "$URL" -O /tmp/src.tar.gz \
-            || wget -q --timeout=120 --tries=3 \
-                 "https://codeload.github.com/${{ github.repository }}/tar.gz/${{ github.sha }}" \
-                 -O /tmp/src.tar.gz
+          MIRROR="https://ghfast.top/https://github.com/${{ github.repository }}/archive/${{ github.sha }}.tar.gz"
+          FALLBACK="https://codeload.github.com/${{ github.repository }}/tar.gz/${{ github.sha }}"
+          # manylinux 镜像不保证有 wget；curl 一定有
+          curl -fsSL --retry 3 --max-time 180 "$MIRROR" -o /tmp/src.tar.gz \
+            || curl -fsSL --retry 3 --max-time 180 "$FALLBACK" -o /tmp/src.tar.gz
           tar -xzf /tmp/src.tar.gz -C src-checkout --strip-components=1
           ls src-checkout | head
 
