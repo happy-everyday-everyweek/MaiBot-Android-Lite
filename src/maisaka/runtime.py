@@ -26,7 +26,7 @@ from src.common.logger import get_logger
 from src.common.message_repository import find_messages
 from src.common.utils.utils_config import ChatConfigUtils, ExpressionConfigUtils, JargonConfigUtils
 from src.config.config import global_config, model_config
-from src.common.optional_features import ENABLE_AGENT, get_agent_tool_provider
+from src.common.optional_features import get_agent_tool_provider
 from src.core.tooling import ToolRegistry, ToolSpec
 from src.learners.expression_learner import ExpressionLearner
 from src.learners.jargon_learner import JargonLearner
@@ -1337,6 +1337,9 @@ class MaisakaHeartFlowChatting(MaisakaRuntimeDisplayMixin):
         if agent_provider_cls is not None:
             self._tool_registry.register_provider(agent_provider_cls())
         self._tool_registry.register_provider(MCPToolProvider(get_mcp_service()))
+        from src.lite_coding_tool import get_provider as get_lite_coding_tool_provider
+
+        self._tool_registry.register_provider(get_lite_coding_tool_provider())
         self._chat_loop_service.set_tool_registry(self._tool_registry)
 
     async def run_sub_agent(
