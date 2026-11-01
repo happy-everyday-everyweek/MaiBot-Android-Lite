@@ -131,6 +131,9 @@ class _AndroidBotBridge:
         return self._bridge.send(text)
 
     def close(self) -> None:
+        from src.lite_coding_tool import configure_host_controller
+
+        configure_host_controller(None)
         self._bridge.close()
 
 
