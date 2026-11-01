@@ -163,12 +163,24 @@ python scripts/check_lite_core.py --strict
 
 ---
 
+## Android 嵌入入口
+
+`src.lite_runtime.LiteRuntimeBridge` 是 Kotlin 可调用的同步外观，在专用线程内运行
+`LiteRuntime`。`send(text)` 将文本交给 `chat_bot.message_process`；`AndroidLiteDriver`
+把真实出站文本回调给宿主。运行时不启动 WebSocket 服务端、WebUI、插件 Runner、
+A_memorix、外接 Agent 或 MCP，聊天与数据库均写入调用方指定的独立实例目录。
+
+公开消息边界的测试位于 `tests/test_lite_runtime.py`。本机真实启动和停止已验证；
+模型回复仍取决于宿主提供的有效模型配置，不由测试伪造。
+
 ## 待办
 
-- [ ] 把 `chat_bot.message_process` 接成 Android 侧入口（替代 maim_message 的 WebSocket 服务端）
-- [ ] 写最小的 `LiteRuntime`：不启动 WebUI / plugin_runtime / API server，只跑消息处理
+- [x] 把 `chat_bot.message_process` 接成 Android 侧入口（替代 maim_message 的 WebSocket 服务端）
+- [x] 写最小的 `LiteRuntime`：不启动 WebUI / plugin_runtime / API server，只跑消息处理
 - [ ] 多租户 / 记忆隔离相关代码的进一步裁剪（`session_id` 简化）
-- [ ] Chaquopy 侧确认 CPython 3.12 支持情况
+- [x] Chaquopy 侧确认 CPython 3.12 支持情况（17.2，兼容 AGP 8.13）
+- [ ] 为 `rapidfuzz`、`msgpack`、`watchfiles`、`rpds-py`、`pydantic-core`、
+  `ahocorasick-rs` 准备 Android bionic wheel；manylinux wheel 不能用于 Chaquopy
 - [ ] 实测瘦身后的启动耗时与 RSS
 
 ---
