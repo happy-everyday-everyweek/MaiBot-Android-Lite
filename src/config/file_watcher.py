@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Awaitable, Callable, Iterable, Sequence
 
-from watchfiles import Change, awatch
+from enum import Enum
 
 import asyncio
 import uuid
@@ -11,6 +11,14 @@ from src.common.logger import get_logger
 
 
 logger = get_logger("file_watcher")
+
+
+class Change(str, Enum):
+    """文件变化类型。嵌入式构建用轮询，不再依赖 watchfiles。"""
+
+    ADDED = "added"
+    MODIFIED = "modified"
+    DELETED = "deleted"
 
 
 @dataclass(frozen=True)
@@ -64,6 +72,7 @@ class FileWatcher:
         self._callback_failure_threshold = callback_failure_threshold
         self._callback_cooldown_s = callback_cooldown_s
         self._running = False
+        self._snapshot: dict[str, float] = {}
         self._task: asyncio.Task[None] | None = None
         self._subscriptions: dict[str, FileWatchSubscription] = {}
         self._subscription_states: dict[str, SubscriptionState] = {}
@@ -138,30 +147,38 @@ class FileWatcher:
             self._task = None
 
     async def _run(self) -> None:
+        self._snapshot = self._snapshot_files()
         while self._running:
             try:
                 if not self._ready_event.is_set():
-                    # ready 表示后台监听任务已接管，不能等待第一次 timeout tick 才放行启动流程。
+                    # ready 表示后台监听任务已接管，不能等待第一次 tick 才放行启动流程。
                     self._ready_event.set()
-                async for changes in awatch(
-                    *self._paths,
-                    debounce=self._debounce_ms,
-                    force_polling=self._force_polling,
-                    yield_on_timeout=True,
-                ):
-                    if not self._running:
-                        break
-                    if not changes:
-                        continue
-                    normalized_changes = self._normalize_changes(changes)
-                    if not normalized_changes:
-                        continue
-                    self._stats.batches_seen += 1
-                    self._stats.changes_seen += len(normalized_changes)
-                    try:
-                        await self._dispatch_changes(normalized_changes)
-                    except Exception as exc:
-                        logger.warning(f"文件变更分发失败: {exc}")
+                await asyncio.sleep(max(self._debounce_ms, 200) / 1000.0)
+                if not self._running:
+                    break
+                current = self._snapshot_files()
+                changes: set[tuple[Change, str]] = set()
+                for path, mtime in current.items():
+                    previous = self._snapshot.get(path)
+                    if previous is None:
+                        changes.add((Change.ADDED, path))
+                    elif previous != mtime:
+                        changes.add((Change.MODIFIED, path))
+                for path in self._snapshot:
+                    if path not in current:
+                        changes.add((Change.DELETED, path))
+                self._snapshot = current
+                if not changes:
+                    continue
+                normalized_changes = self._normalize_changes(changes)
+                if not normalized_changes:
+                    continue
+                self._stats.batches_seen += 1
+                self._stats.changes_seen += len(normalized_changes)
+                try:
+                    await self._dispatch_changes(normalized_changes)
+                except Exception as exc:
+                    logger.warning(f"文件变更分发失败: {exc}")
             except asyncio.CancelledError:
                 return
             except Exception as exc:
@@ -169,6 +186,21 @@ class FileWatcher:
                 logger.error(f"文件监视器运行异常，将在1秒后重试: {exc}")
                 if self._running:
                     await asyncio.sleep(1.0)
+
+    def _snapshot_files(self) -> dict[str, float]:
+        """记录所有被监视路径的文件修改时间。"""
+        snapshot: dict[str, float] = {}
+        for path in self._paths:
+            try:
+                if path.is_dir():
+                    for item in path.rglob("*"):
+                        if item.is_file():
+                            snapshot[str(item.resolve())] = item.stat().st_mtime
+                elif path.is_file():
+                    snapshot[str(path)] = path.stat().st_mtime
+            except OSError:
+                continue
+        return snapshot
 
     async def _dispatch_changes(self, changes: Sequence[FileChange]) -> None:
         for subscription in list(self._subscriptions.values()):

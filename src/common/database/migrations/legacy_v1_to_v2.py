@@ -9,7 +9,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple, cast
 
 import json
 
-import msgpack
+import pickle
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
@@ -40,7 +40,7 @@ _LEGACY_V1_TABLE_NAMES = (
     "person_info",
     "thinking_back",
 )
-_EMPTY_MESSAGE_SEQUENCE_BYTES = msgpack.packb([], use_bin_type=True)
+_EMPTY_MESSAGE_SEQUENCE_BYTES = pickle.dumps([], protocol=pickle.HIGHEST_PROTOCOL)
 
 
 @dataclass(frozen=True)
@@ -512,7 +512,7 @@ def _build_message_raw_content(processed_plain_text: Optional[str], display_mess
     if not message_text:
         return cast(bytes, _EMPTY_MESSAGE_SEQUENCE_BYTES)
     serialized_payload = [{"type": "text", "data": message_text}]
-    return cast(bytes, msgpack.packb(serialized_payload, use_bin_type=True))
+    return cast(bytes, pickle.dumps(serialized_payload, protocol=pickle.HIGHEST_PROTOCOL))
 
 
 def _deduce_image_type_name(value: Any) -> str:

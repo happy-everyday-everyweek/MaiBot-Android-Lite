@@ -6,7 +6,7 @@ from sqlmodel import col, select
 
 import base64
 import hashlib
-import msgpack
+import pickle
 import random
 import re
 
@@ -54,13 +54,13 @@ _DB_WRITE_THREAD_LOCK = threading.Lock()
 class MessageUtils:
     @staticmethod
     def from_db_record_msg_to_MaiSeq(raw_content: bytes) -> MessageSequence:
-        unpacked_data = msgpack.unpackb(raw_content)
+        unpacked_data = pickle.loads(raw_content)
         return MessageSequence.from_dict(unpacked_data)
 
     @staticmethod
     def from_MaiSeq_to_db_record_msg(msg: MessageSequence) -> bytes:
         dict_representation = msg.to_dict()
-        return msgpack.packb(dict_representation)  # type: ignore
+        return pickle.dumps(dict_representation, protocol=pickle.HIGHEST_PROTOCOL)
 
     @staticmethod
     def from_maim_message_segments_to_MaiSeq(message: "MessageBase") -> MessageSequence:

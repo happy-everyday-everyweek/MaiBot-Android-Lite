@@ -1,16 +1,15 @@
-"""MsgPack 编解码器"""
+"""进程内编解码器。
+
+插件运行时在嵌入式构建中不启用，这里改用 pickle，去掉 msgpack 原生依赖；
+只服务 Python 进程之间的信封往返，不对外暴露格式。
+"""
 
 from abc import ABC, abstractmethod
-from datetime import date, datetime
-from enum import Enum
 from typing import Any, Dict
 
-import msgpack
+import pickle
 
 from .envelope import Envelope
-
-DATETIME_EXT_CODE = 42
-DATE_EXT_CODE = 43
 
 
 class Codec(ABC):
@@ -30,35 +29,13 @@ class Codec(ABC):
 
 
 class MsgPackCodec(Codec):
-    """MsgPack 编解码器"""
-
-    @staticmethod
-    def _encode_ext_type(obj: Any) -> Any:
-        """编码 MsgPack 原生不支持的 Python 类型。"""
-        if isinstance(obj, datetime):
-            return msgpack.ExtType(DATETIME_EXT_CODE, obj.isoformat().encode("utf-8"))
-        if isinstance(obj, date):
-            return msgpack.ExtType(DATE_EXT_CODE, obj.isoformat().encode("utf-8"))
-        if isinstance(obj, Enum):
-            return obj.value
-        raise TypeError(f"can not serialize {type(obj).__name__!r} object")
-
-    @staticmethod
-    def _decode_ext_type(code: int, data: bytes) -> Any:
-        if code == DATETIME_EXT_CODE:
-            return datetime.fromisoformat(data.decode("utf-8"))
-        if code == DATE_EXT_CODE:
-            return date.fromisoformat(data.decode("utf-8"))
-        return msgpack.ExtType(code, data)
+    """保留原类名，内部使用 pickle。"""
 
     def encode(self, obj: Dict[str, Any]) -> bytes:
-        result = msgpack.packb(obj, default=self._encode_ext_type, use_bin_type=True)
-        if result is None:
-            raise ValueError("msgpack.packb returned None, expected bytes")
-        return result
+        return pickle.dumps(obj, protocol=pickle.HIGHEST_PROTOCOL)
 
     def decode(self, data: bytes) -> Dict[str, Any]:
-        result = msgpack.unpackb(data, ext_hook=self._decode_ext_type, raw=False)
+        result = pickle.loads(data)
         if not isinstance(result, dict):
             raise ValueError(f"期望解码为 dict，实际为 {type(result)}")
         return result

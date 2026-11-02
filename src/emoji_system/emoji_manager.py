@@ -6,10 +6,10 @@ from typing import Any, Literal, Optional
 import asyncio
 import hashlib
 import heapq
+import difflib
 import random
 import re
 
-from rapidfuzz.distance import Levenshtein
 from rich.traceback import install
 from sqlmodel import select
 
@@ -1307,10 +1307,7 @@ class EmojiManager:
                 continue
 
             emotion_similarities = [
-                1 - Levenshtein.distance(normalized_text_emotion, str(emotion).strip().lower()) / max(
-                    len(normalized_text_emotion),
-                    len(str(emotion).strip().lower()),
-                )
+                difflib.SequenceMatcher(None, normalized_text_emotion, str(emotion).strip().lower()).ratio()
                 for emotion in candidate_emotions
                 if emotion
             ]
