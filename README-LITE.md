@@ -20,7 +20,7 @@
 - A_memorix 长期记忆
 - 外接 Agent / ACP
 
-把这些砍掉之后，核心链路的原生依赖降到 **10 个**，全部在 aarch64 上可得。
+把这些砍掉之后，核心链路的原生依赖降到 **6 个**，其中 5 个在 Chaquopy 源可得，pydantic-core 由 CI 交叉编译。
 
 ---
 
@@ -35,25 +35,18 @@
 | `fastapi` / `uvicorn` / `starlette` | 必需 | 完全移除 |
 | 需要 proot | 是 | **否** |
 
-保留下来的 10 个原生扩展，全部有 PyPI 官方 manylinux aarch64 轮子，**无需交叉编译**：
+保留下来的 6 个原生扩展：
 
-| 包 | wheel 体积 | manylinux tag |
-|---|---|---|
-| numpy | 15 MB | 2_27 / 2_28 |
-| pillow | 6.3 MB | 2_27 / 2_28 |
-| zstandard | 4.9 MB | 2_17 / 2014 |
-| cryptography | 4.6 MB | 2_17 / 2014 |
-| pydantic-core | 2.0 MB | 2_17 / 2014 |
-| rapidfuzz | 1.4 MB | 2_26 / 2_28 |
-| greenlet | 600 KB | 2_24 / 2_28 |
-| msgpack | 452 KB | 2_17 / 2014 |
-| watchfiles | 448 KB | 2_17 / 2014 |
-| rpds-py | 368 KB | 2_17 / 2014 |
-| **合计** | **36 MB** | |
+| 包 | 来源 |
+|---|---|
+| numpy | Chaquopy 源 |
+| pillow | Chaquopy 源 |
+| zstandard | Chaquopy 源 |
+| cryptography / cffi | Chaquopy 源 |
+| greenlet | Chaquopy 源 |
+| pydantic-core | CI 用 Rust + NDK 交叉编译 |
 
-> 注意 tag 不统一：`pydantic-core` 只发 2_17，`pillow`/`numpy` 只发 2_27+。
-> 用 `pip download --platform` 时必须同时给 `manylinux2014_aarch64` 和
-> `manylinux_2_28_aarch64` 两个值，否则会漏包。
+已移除的原生包：msgpack 改用 pickle，watchfiles 改用轮询，rpds-py 改用纯 Python 实现，rapidfuzz 改用 difflib，ahocorasick-rs 无调用点。
 
 ---
 
@@ -179,8 +172,7 @@ A_memorix、外接 Agent 或 MCP，聊天与数据库均写入调用方指定的
 - [x] 写最小的 `LiteRuntime`：不启动 WebUI / plugin_runtime / API server，只跑消息处理
 - [ ] 多租户 / 记忆隔离相关代码的进一步裁剪（`session_id` 简化）
 - [x] Chaquopy 侧确认 CPython 3.12 支持情况（17.2，兼容 AGP 8.13）
-- [ ] 为 `rapidfuzz`、`msgpack`、`watchfiles`、`rpds-py`、`pydantic-core`、
-  `ahocorasick-rs` 准备 Android bionic wheel；manylinux wheel 不能用于 Chaquopy
+- [ ] 为 `pydantic-core` 准备 Android bionic wheel（已加入 Coda 的 personal-agent CI 交叉编译）
 - [ ] 实测瘦身后的启动耗时与 RSS
 
 ---
