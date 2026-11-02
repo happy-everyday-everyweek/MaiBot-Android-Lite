@@ -17,7 +17,7 @@ import time
 
 from src.common.logger import get_logger
 from src.plugin_runtime import detect_host_application_version
-from src.plugin_runtime.protocol.codec import Codec, MsgPackCodec
+from src.plugin_runtime.protocol.codec import Codec, PickleCodec
 from src.plugin_runtime.protocol.envelope import (
     Envelope,
     HelloPayload,
@@ -54,7 +54,7 @@ class RPCServer:
     ):
         self._transport = transport
         self._session_token = session_token or secrets.token_hex(32)
-        self._codec = codec or MsgPackCodec()
+        self._codec = codec or PickleCodec()
         self._send_queue_size = send_queue_size
         self._host_version = host_version or detect_host_application_version()
         self._logger = get_logger(logger_name)

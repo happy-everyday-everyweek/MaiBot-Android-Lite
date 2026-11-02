@@ -10,7 +10,7 @@ import uuid
 from src.common.logger import get_logger
 from src.common.startup_diagnostics import diagnostic_stage
 from src.plugin_runtime.local_sdk import read_local_sdk_version
-from src.plugin_runtime.protocol.codec import Codec, MsgPackCodec
+from src.plugin_runtime.protocol.codec import Codec, PickleCodec
 from src.plugin_runtime.protocol.envelope import (
     Envelope,
     HelloPayload,
@@ -61,7 +61,7 @@ class RPCClient:
         """
         self._host_address: str = host_address
         self._session_token: str = session_token
-        self._codec: Codec = codec or MsgPackCodec()
+        self._codec: Codec = codec or PickleCodec()
 
         self._id_gen = RequestIdGenerator()
         self._connection: Optional[Connection] = None

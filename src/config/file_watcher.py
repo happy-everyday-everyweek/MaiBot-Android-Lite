@@ -1,8 +1,7 @@
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import Awaitable, Callable, Iterable, Sequence
-
-from enum import Enum
 
 import asyncio
 import uuid

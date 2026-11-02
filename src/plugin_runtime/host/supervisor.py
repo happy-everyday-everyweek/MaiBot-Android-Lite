@@ -69,7 +69,7 @@ from src.plugin_runtime.protocol.envelope import (
     ValidatePluginConfigPayload,
     ValidatePluginConfigResultPayload,
 )
-from src.plugin_runtime.protocol.codec import MsgPackCodec
+from src.plugin_runtime.protocol.codec import PickleCodec
 from src.plugin_runtime.protocol.errors import ErrorCode, RPCError
 from src.plugin_runtime.transport.factory import create_transport_server
 from src.plugin_runtime.webui_schema import WebUIExtension, replace_webui_documents
@@ -182,7 +182,7 @@ class PluginRunnerSupervisor:
         self._message_gateway = MessageGateway(self._component_registry)
         self._log_bridge = RunnerLogBridge(runtime_logger_name=self._logger_name)
 
-        codec = MsgPackCodec()
+        codec = PickleCodec()
         self._rpc_server = RPCServer(
             transport=self._transport,
             codec=codec,

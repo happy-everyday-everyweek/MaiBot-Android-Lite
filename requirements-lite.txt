@@ -12,9 +12,9 @@
 #   matplotlib   - 上游已不使用
 #   maibot-dashboard - WebUI 前端资产，本构建不使用
 #
-# 保留的原生扩展（10 个）均在 aarch64 上可得：
-#   numpy, pydantic_core, sqlalchemy(greenlet), pillow,
-#   msgpack, rapidfuzz, watchfiles, zstandard, rpds-py
+# 保留的原生扩展（6 个）均在 aarch64 上可得：
+#   numpy, pydantic_core, sqlalchemy(greenlet), pillow, zstandard, cryptography
+# 已移除：msgpack、rapidfuzz、watchfiles、rpds-py、ahocorasick-rs
 
 # --- 核心运行时 ---
 aiohappyeyeballs>=2.6.1

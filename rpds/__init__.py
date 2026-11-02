@@ -56,13 +56,13 @@ class HashTrieMap(Mapping[K, V], Generic[K, V]):
     def __contains__(self, key: object) -> bool:
         return key in self._data
 
-    def items(self):
+    def items(self) -> Any:
         return self._data.items()
 
-    def keys(self):
+    def keys(self) -> Any:
         return self._data.keys()
 
-    def values(self):
+    def values(self) -> Any:
         return self._data.values()
 
     def __repr__(self) -> str:
@@ -133,7 +133,7 @@ class List(Sequence[T], Generic[T]):
     def push_front(self, value: T) -> "List[T]":
         return List((value, *self._items))
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: int | slice) -> Any:
         return self._items[index]
 
     def __iter__(self) -> Iterator[T]:

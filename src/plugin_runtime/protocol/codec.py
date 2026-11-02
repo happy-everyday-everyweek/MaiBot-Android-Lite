@@ -28,7 +28,7 @@ class Codec(ABC):
     def decode(self, data: bytes) -> Dict[str, Any]: ...
 
 
-class MsgPackCodec(Codec):
+class PickleCodec(Codec):
     """保留原类名，内部使用 pickle。"""
 
     def encode(self, obj: Dict[str, Any]) -> bytes:

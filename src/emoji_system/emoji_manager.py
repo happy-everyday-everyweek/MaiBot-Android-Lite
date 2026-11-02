@@ -4,9 +4,9 @@ from time import perf_counter
 from typing import Any, Literal, Optional
 
 import asyncio
+import difflib
 import hashlib
 import heapq
-import difflib
 import random
 import re
 
