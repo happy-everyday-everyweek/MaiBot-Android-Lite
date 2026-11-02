@@ -56,7 +56,7 @@ from src.config.official_configs import (
 )
 from src.webui.config_schema import ConfigSchemaGenerator
 from src.webui.dependencies import require_auth
-from src.webui.utils.toml_utils import _update_toml_doc, save_toml_with_format
+from src.common.toml_utils import _update_toml_doc, save_toml_with_format
 
 logger = get_logger("webui")
 

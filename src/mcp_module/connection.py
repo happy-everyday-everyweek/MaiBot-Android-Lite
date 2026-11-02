@@ -14,7 +14,7 @@ import httpx
 import logging
 import sys
 
-from src.cli.console import console
+from src.common.cli_console import console
 from src.common.http_client import get_shared_ssl_context, get_shared_ssl_context_async
 from src.common.startup_diagnostics import diagnostic_stage
 from src.core.tooling import ToolExecutionResult

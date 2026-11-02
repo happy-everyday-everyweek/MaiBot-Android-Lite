@@ -12,7 +12,7 @@ from PIL import ImageDraw, ImageFont
 from pydantic import BaseModel
 from pydantic import Field as PydanticField
 
-from src.cli.maisaka_cli_sender import CLI_PLATFORM_NAME
+from src.common.maisaka_display import CLI_PLATFORM_NAME
 from src.common.data_models.image_data_model import MaiEmoji
 from src.common.data_models.message_component_data_model import ImageComponent, MessageSequence, TextComponent
 from src.common.logger import get_logger

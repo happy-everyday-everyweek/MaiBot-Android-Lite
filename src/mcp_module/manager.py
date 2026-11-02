@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, Callable, List, Optional
 
 import asyncio
 
-from src.cli.console import console
+from src.common.cli_console import console
 from src.common.startup_diagnostics import diagnostic_stage
 from src.core.tooling import (
     ToolExecutionResult,

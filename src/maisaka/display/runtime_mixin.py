@@ -11,7 +11,7 @@ from rich.pretty import Pretty
 from rich.text import Text
 
 from src.chat.heart_flow.heartFC_utils import CycleDetail
-from src.cli.console import console
+from src.common.cli_console import console
 from src.common.logger import get_logger
 from src.config.config import global_config
 from src.llm_models.payload_content.context_item import AssistantMessageItem, ContextItemMeta, ContextTextPart

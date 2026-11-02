@@ -23,6 +23,43 @@ def configure_host_controller(controller: Any) -> None:
     _controller = controller
 
 
+def get_read_file_spec() -> ToolSpec:
+    return ToolSpec(
+        name="context_read_file",
+        description=(
+            "只为补充上下文或核验 Coding Agent 成果而读取文件，不是用来替用户完成任务的执行工具。"
+            "只能读取附件目录或当前工作区内文件，单次最多 1MB。"
+        ),
+        parameters_schema={
+            "type": "object",
+            "properties": {"path": {"type": "string", "description": "要核验的文件路径。"}},
+            "required": ["path"],
+        },
+        provider_name="coda_android",
+        provider_type="builtin",
+    )
+
+
+def get_terminal_spec() -> ToolSpec:
+    return ToolSpec(
+        name="context_run_terminal",
+        description=(
+            "只在当前工作区运行只读检查命令，用于核验 Coding Agent 的成果或补充上下文。"
+            "不得用它直接替用户完成开发任务，不得执行破坏性命令、后台常驻服务或交互式程序。"
+        ),
+        parameters_schema={
+            "type": "object",
+            "properties": {
+                "command": {"type": "string", "description": "例如 git diff、grep、测试命令。"},
+                "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 30},
+            },
+            "required": ["command"],
+        },
+        provider_name="coda_android",
+        provider_type="builtin",
+    )
+
+
 def get_tool_spec() -> ToolSpec:
     """声明只包含会话生命周期的控制动作。"""
 
@@ -55,7 +92,11 @@ class CodingAgentToolProvider(ToolProvider):
         self,
         context: Optional[ToolAvailabilityContext] = None,
     ) -> List[ToolSpec]:
-        return [get_tool_spec()] if _controller is not None else []
+        return (
+            [get_tool_spec(), get_read_file_spec(), get_terminal_spec()]
+            if _controller is not None
+            else []
+        )
 
     async def invoke(
         self,
@@ -68,6 +109,39 @@ class CodingAgentToolProvider(ToolProvider):
                 tool_name=invocation.tool_name,
                 success=False,
                 error_message="当前宿主没有 Coding Agent 控制器。",
+            )
+        if invocation.tool_name == "context_read_file":
+            try:
+                payload = json.loads(str(_controller.readFile(str(invocation.arguments.get("path") or ""))))
+            except Exception as exc:
+                return ToolExecutionResult(
+                    tool_name=invocation.tool_name, success=False, error_message=str(exc)
+                )
+            return ToolExecutionResult(
+                tool_name=invocation.tool_name,
+                success=bool(payload.get("ok")),
+                content=str(payload.get("content") or payload.get("message") or ""),
+                error_message=None if payload.get("ok") else str(payload.get("message") or "读取失败"),
+            )
+        if invocation.tool_name == "context_run_terminal":
+            try:
+                payload = json.loads(
+                    str(
+                        _controller.runTerminal(
+                            str(invocation.arguments.get("command") or ""),
+                            int(invocation.arguments.get("timeout_seconds") or 20),
+                        )
+                    )
+                )
+            except Exception as exc:
+                return ToolExecutionResult(
+                    tool_name=invocation.tool_name, success=False, error_message=str(exc)
+                )
+            return ToolExecutionResult(
+                tool_name=invocation.tool_name,
+                success=bool(payload.get("ok")),
+                content=str(payload.get("output") or payload.get("message") or ""),
+                error_message=None if payload.get("ok") else str(payload.get("message") or "命令失败"),
             )
         action = str(invocation.arguments.get("action") or "").strip().lower()
         text = str(invocation.arguments.get("text") or "").strip()

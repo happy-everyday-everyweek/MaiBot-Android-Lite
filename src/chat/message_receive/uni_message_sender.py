@@ -12,7 +12,6 @@ from src.common.database.database import get_db_session
 from src.common.logger import get_logger
 from src.common.message_server.api import get_global_api
 from src.common.utils.utils_message import MessageUtils
-from src.webui.routers.chat.serializers import serialize_message_sequence
 
 install(extra_lines=3)
 
@@ -82,6 +81,7 @@ async def _send_message(message: SessionMessage, show_log: bool = True) -> bool:
         is_webui_message = (platform == webui_platform) or is_webui_virtual_group(group_id)
 
         if is_webui_message and chat_manager is not None:
+            from src.webui.routers.chat.serializers import serialize_message_sequence
             # WebUI 聊天室消息（包括虚拟身份模式），通过 WebSocket 广播
             import time
             from src.config.config import global_config

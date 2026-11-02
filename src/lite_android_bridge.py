@@ -160,7 +160,11 @@ def create_bridge(
     from src.lite_coding_tool import configure_host_controller
 
     global_config.bot.nickname = nickname
-    global_config.personality.personality = persona
+    global_config.personality.personality = (
+        persona
+        + "\n你可以用 context_read_file 和 context_run_terminal 补充上下文、核验 Coding Agent 的成果，"
+        "但它们不是替用户直接完成工作的工具。需要交付代码时，应规划并控制 Coding Agent 完成。"
+    )
     global_config.personality.behavior_style = persona
     if user_about.strip():
         global_config.personality.personality += f"\n你正在和{user_name}相处。关于对方：{user_about.strip()}"

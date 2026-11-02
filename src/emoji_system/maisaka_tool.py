@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional, TYPE_CHECKING
 
 from src.chat.message_receive.chat_manager import chat_manager
-from src.cli.maisaka_cli_sender import CLI_PLATFORM_NAME, render_cli_message
+from src.common.maisaka_display import CLI_PLATFORM_NAME, render_cli_message
 from src.common.data_models.image_data_model import MaiEmoji
 from src.common.logger import get_logger
 from src.common.utils.image_path import resolve_stored_image_path

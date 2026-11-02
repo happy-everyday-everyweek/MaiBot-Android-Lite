@@ -41,7 +41,7 @@ from src.platform_io import (
     get_platform_io_manager,
 )
 from src.webui.dependencies import require_auth
-from src.webui.utils.toml_utils import save_toml_with_format
+from src.common.toml_utils import save_toml_with_format
 
 from .service import (
     WEBUI_CHAT_PLATFORM,
