@@ -51,7 +51,7 @@ sqlmodel>=0.0.24
 greenlet==3.0.1
 
 # --- 文本处理 ---
-jieba>=0.42.1
+# jieba 已内置到仓库根目录 jieba/（PyPI 只发 sdist，Chaquopy 需要 wheel）。
 pypinyin>=0.54.0
 # rapidfuzz / ahocorasick-rs 已移除：emotion 相似度改用 difflib，关键词匹配无调用点。
 # msgpack 已移除：消息序列化与插件协议改用 pickle。
