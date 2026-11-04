@@ -221,6 +221,10 @@ class LiteRuntimeBridge:
         future.add_done_callback(self._report_failure)
         return "accepted"
 
+    def notify_event(self, text: str) -> str:
+        """宿主事件与用户消息走同一入口，因此同样会触发规划轮次。"""
+        return self.send(text)
+
     def _report_failure(self, future: "asyncio.Future[None]") -> None:
         if future.cancelled() or self._on_error is None:
             return

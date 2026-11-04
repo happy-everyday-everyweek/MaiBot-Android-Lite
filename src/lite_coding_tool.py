@@ -113,6 +113,23 @@ def get_model_list_spec() -> ToolSpec:
     )
 
 
+def get_approve_spec() -> ToolSpec:
+    return ToolSpec(
+        name="approve_tool",
+        description=(
+            "应答 Coding Agent 的工具审批请求。decision=allow 放行，decision=deny 拒绝。"
+            "只有收到审批请求后才能调用。"
+        ),
+        parameters_schema={
+            "type": "object",
+            "properties": {"decision": {"type": "string", "enum": ["allow", "deny"]}},
+            "required": ["decision"],
+        },
+        provider_name="coda_android",
+        provider_type="builtin",
+    )
+
+
 def get_model_select_spec() -> ToolSpec:
     return ToolSpec(
         name="model_select",
@@ -150,6 +167,7 @@ class CodingAgentToolProvider(ToolProvider):
                 get_session_list_spec(),
                 get_model_list_spec(),
                 get_model_select_spec(),
+                get_approve_spec(),
                 get_read_file_spec(),
                 get_terminal_spec(),
             ]
@@ -201,6 +219,21 @@ class CodingAgentToolProvider(ToolProvider):
                 success=bool(payload.get("ok")),
                 content=str(payload.get("message") or ""),
                 error_message=None if payload.get("ok") else str(payload.get("message") or "切换失败"),
+            )
+        if invocation.tool_name == "approve_tool":
+            try:
+                payload = json.loads(
+                    str(_controller.approveTool(str(invocation.arguments.get("decision") or "")))
+                )
+            except Exception as exc:
+                return ToolExecutionResult(
+                    tool_name=invocation.tool_name, success=False, error_message=str(exc)
+                )
+            return ToolExecutionResult(
+                tool_name=invocation.tool_name,
+                success=bool(payload.get("ok")),
+                content=str(payload.get("message") or ""),
+                error_message=None if payload.get("ok") else str(payload.get("message") or "审批失败"),
             )
         if invocation.tool_name == "context_read_file":
             try:

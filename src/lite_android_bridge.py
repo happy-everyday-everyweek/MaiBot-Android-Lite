@@ -130,6 +130,10 @@ class _AndroidBotBridge:
     def send(self, text: str) -> str:
         return self._bridge.send(text)
 
+    def notify_event(self, text: str) -> str:
+        """把宿主事件作为一条消息送进内核，触发规划轮次。"""
+        return self._bridge.notify_event(text)
+
     def close(self) -> None:
         from src.lite_coding_tool import configure_host_controller
 
