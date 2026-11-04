@@ -163,6 +163,28 @@ class LiteRuntime:
         }
         await self._chat_bot.message_process(payload)
 
+    async def notify_event(self, text: str) -> None:
+        """宿主事件作为内部任务注入：走 proactive 轮次，不经过消息门控，也不冒充用户消息。"""
+        content = text.strip()
+        if not content:
+            raise ValueError("事件内容不能为空")
+        await self.start()
+
+        from src.chat.heart_flow.heartflow_manager import heartflow_manager
+        from src.common.utils.utils_session import SessionUtils
+
+        session_id = SessionUtils.calculate_session_id(
+            PLATFORM,
+            user_id=USER_ID,
+            account_id=ACCOUNT_ID,
+        )
+        chat = await heartflow_manager.get_or_create_heartflow_chat(session_id)
+        chat.enqueue_internal_task(
+            source_kind="coda_host_event",
+            text=content,
+            reason="Coding Agent 事件",
+        )
+
     async def stop(self) -> None:
         """停止主链后台任务并释放本地驱动。"""
         if not self._started:
@@ -222,8 +244,12 @@ class LiteRuntimeBridge:
         return "accepted"
 
     def notify_event(self, text: str) -> str:
-        """宿主事件与用户消息走同一入口，因此同样会触发规划轮次。"""
-        return self.send(text)
+        """宿主事件走 proactive 轮次，不经过消息门控。"""
+        if self._failure is not None:
+            raise RuntimeError("MaiBot Lite 事件循环已停止") from self._failure
+        future = asyncio.run_coroutine_threadsafe(self._runtime.notify_event(text), self._loop)
+        future.add_done_callback(self._report_failure)
+        return "accepted"
 
     def _report_failure(self, future: "asyncio.Future[None]") -> None:
         if future.cancelled() or self._on_error is None:
