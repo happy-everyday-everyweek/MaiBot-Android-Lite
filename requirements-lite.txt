@@ -68,6 +68,9 @@ numpy==1.26.2
 
 # --- LLM 客户端 ---
 openai>=1.95.0
+# jiter 是 openai 的 Rust 原生依赖，由 CI 交叉编译成 Android 轮子；显式钉住，
+# 避免上游抬版本后本地没有对应轮子导致安装失败。
+jiter==0.18.0
 google-genai>=1.39.1
 google-auth>=2.49.2
 tenacity>=9.1.4
