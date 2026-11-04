@@ -61,21 +61,73 @@ def get_terminal_spec() -> ToolSpec:
 
 
 def get_tool_spec() -> ToolSpec:
-    """声明只包含会话生命周期的控制动作。"""
+    """声明会话生命周期控制，可指定任意会话。"""
 
     return ToolSpec(
         name="coding_agent",
         description=(
-            "控制本机 Coding Agent 会话。create 新建编码会话，send 向当前编码会话发送任务，"
-            "stop 停止当前生成，close 关闭当前编码会话。不会执行任意 Shell。"
+            "控制本机 Coding Agent 会话。create 新建编码会话；send 向会话发送任务；"
+            "stop 停止会话生成；close 关闭会话。省略 session_id 时作用于用户当前打开的会话，"
+            "指定 session_id 时作用于对应会话。不会执行任意 Shell。"
         ),
         parameters_schema={
             "type": "object",
             "properties": {
                 "action": {"type": "string", "enum": ["create", "send", "stop", "close"]},
                 "text": {"type": "string", "description": "action=send 时发送的任务文本。"},
+                "session_id": {
+                    "type": "string",
+                    "description": "目标会话 id；先用 session_list 查。省略则用当前打开的会话。",
+                },
             },
             "required": ["action"],
+        },
+        provider_name="coda_android",
+        provider_type="builtin",
+    )
+
+
+def get_session_list_spec() -> ToolSpec:
+    return ToolSpec(
+        name="session_list",
+        description=(
+            "列出本机 Coding Agent 的会话（id、标题、状态、更新时间）以及当前打开的会话 id。"
+            "需要控制某个会话前先用它拿到 session_id。"
+        ),
+        parameters_schema={"type": "object", "properties": {}},
+        provider_name="coda_android",
+        provider_type="builtin",
+    )
+
+
+def get_model_list_spec() -> ToolSpec:
+    return ToolSpec(
+        name="model_list",
+        description=(
+            "列出可用于 Personal Agent 的模型（provider_id、供应商名、模型名），"
+            "并返回当前规划模型与回复模型的选择。"
+        ),
+        parameters_schema={"type": "object", "properties": {}},
+        provider_name="coda_android",
+        provider_type="builtin",
+    )
+
+
+def get_model_select_spec() -> ToolSpec:
+    return ToolSpec(
+        name="model_select",
+        description=(
+            "切换 Personal Agent 的模型。kind=planner 换规划模型，kind=reply 换回复模型；"
+            "provider_id 与 model 必须来自 model_list。切换后下一轮对话生效。"
+        ),
+        parameters_schema={
+            "type": "object",
+            "properties": {
+                "kind": {"type": "string", "enum": ["planner", "reply"]},
+                "provider_id": {"type": "string"},
+                "model": {"type": "string"},
+            },
+            "required": ["kind", "provider_id", "model"],
         },
         provider_name="coda_android",
         provider_type="builtin",
@@ -93,7 +145,14 @@ class CodingAgentToolProvider(ToolProvider):
         context: Optional[ToolAvailabilityContext] = None,
     ) -> List[ToolSpec]:
         return (
-            [get_tool_spec(), get_read_file_spec(), get_terminal_spec()]
+            [
+                get_tool_spec(),
+                get_session_list_spec(),
+                get_model_list_spec(),
+                get_model_select_spec(),
+                get_read_file_spec(),
+                get_terminal_spec(),
+            ]
             if _controller is not None
             else []
         )
@@ -109,6 +168,39 @@ class CodingAgentToolProvider(ToolProvider):
                 tool_name=invocation.tool_name,
                 success=False,
                 error_message="当前宿主没有 Coding Agent 控制器。",
+            )
+        if invocation.tool_name == "session_list":
+            return ToolExecutionResult(
+                tool_name=invocation.tool_name,
+                success=True,
+                content=str(_controller.listSessions()),
+            )
+        if invocation.tool_name == "model_list":
+            return ToolExecutionResult(
+                tool_name=invocation.tool_name,
+                success=True,
+                content=str(_controller.listModels()),
+            )
+        if invocation.tool_name == "model_select":
+            try:
+                payload = json.loads(
+                    str(
+                        _controller.selectModel(
+                            str(invocation.arguments.get("kind") or ""),
+                            str(invocation.arguments.get("provider_id") or ""),
+                            str(invocation.arguments.get("model") or ""),
+                        )
+                    )
+                )
+            except Exception as exc:
+                return ToolExecutionResult(
+                    tool_name=invocation.tool_name, success=False, error_message=str(exc)
+                )
+            return ToolExecutionResult(
+                tool_name=invocation.tool_name,
+                success=bool(payload.get("ok")),
+                content=str(payload.get("message") or ""),
+                error_message=None if payload.get("ok") else str(payload.get("message") or "切换失败"),
             )
         if invocation.tool_name == "context_read_file":
             try:
@@ -145,6 +237,7 @@ class CodingAgentToolProvider(ToolProvider):
             )
         action = str(invocation.arguments.get("action") or "").strip().lower()
         text = str(invocation.arguments.get("text") or "").strip()
+        session_id = str(invocation.arguments.get("session_id") or "").strip()
         if action not in {"create", "send", "stop", "close"}:
             return ToolExecutionResult(
                 tool_name=invocation.tool_name,
@@ -158,7 +251,9 @@ class CodingAgentToolProvider(ToolProvider):
                 error_message="action=send 需要 text。",
             )
         try:
-            response: Dict[str, Any] = json.loads(str(_controller.controlSession(action, text)))
+            response: Dict[str, Any] = json.loads(
+                str(_controller.controlSession(action, text, session_id))
+            )
         except Exception as exc:
             return ToolExecutionResult(
                 tool_name=invocation.tool_name,
